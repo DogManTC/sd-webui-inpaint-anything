@@ -220,7 +220,28 @@ def select_mask(input_image, sam_image, invert_chk, ignore_black_chk, sel_mask):
     sam_masks = sam_dict["sam_masks"]
 
     # image = sam_image["image"]
-    mask = sam_image["mask"][:, :, 0:1]
+    mask = sam_image.get("mask")
+    if mask is None:
+        ia_logging.error("Mask data missing in sam_image")
+        ret_sel_mask = None if sel_mask is None else gr.update()
+        return ret_sel_mask
+
+    if not isinstance(mask, np.ndarray):
+        try:
+            mask = np.asarray(mask)
+        except Exception as e:
+            ia_logging.error(f"Failed to convert mask to ndarray: {e}")
+            ret_sel_mask = None if sel_mask is None else gr.update()
+            return ret_sel_mask
+
+    if mask.ndim == 2:
+        mask = mask[:, :, np.newaxis]
+    elif mask.ndim == 3:
+        mask = mask[:, :, 0:1]
+    else:
+        ia_logging.error(f"Unexpected mask dimensions: {mask.shape}")
+        ret_sel_mask = None if sel_mask is None else gr.update()
+        return ret_sel_mask
 
     try:
         seg_image = inpalib.create_mask_image(mask, sam_masks, ignore_black_chk)

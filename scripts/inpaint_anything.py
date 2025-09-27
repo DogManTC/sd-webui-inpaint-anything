@@ -221,11 +221,14 @@ def select_mask(input_image, sam_image, invert_chk, ignore_black_chk, sel_mask):
 
     mask = None
 
+    # gr.Image(tool="sketch") typically returns a dict with keys like {"image": ..., "mask": ...}
     if isinstance(sam_image, dict):
         mask = sam_image.get("mask")
         if mask is None:
+            # Fallback: some Gradio versions send only "image" for sketch-only selections
             mask = sam_image.get("image")
     else:
+        # Older/newer gradio objects may be dataclasses; handle them defensively
         try:
             from gradio.data_classes import SketchpadData  # type: ignore
         except Exception:
@@ -236,13 +239,15 @@ def select_mask(input_image, sam_image, invert_chk, ignore_black_chk, sel_mask):
         elif hasattr(sam_image, "mask"):
             mask = getattr(sam_image, "mask", None)
         elif isinstance(sam_image, np.ndarray):
+            # In some edge cases we might be handed a raw ndarray
             mask = sam_image
 
     if mask is None:
-        ia_logging.error("Mask data missing in sam_image")
+        ia_logging.error("Mask data missing in sam_image. Draw on the segmented preview before creating a mask.")
         ret_sel_mask = None if sel_mask is None else gr.update()
         return ret_sel_mask
 
+    # Ensure numpy array and correct shape
     if not isinstance(mask, np.ndarray):
         try:
             mask = np.asarray(mask)
@@ -266,13 +271,13 @@ def select_mask(input_image, sam_image, invert_chk, ignore_black_chk, sel_mask):
             seg_image = inpalib.invert_mask(seg_image)
 
         sam_dict["mask_image"] = seg_image
-
     except Exception as e:
         print(traceback.format_exc())
         ia_logging.error(str(e))
         ret_sel_mask = None if sel_mask is None else gr.update()
         return ret_sel_mask
 
+    # Overlay on input if sizes match, otherwise return the mask image directly
     if input_image is not None and input_image.shape == seg_image.shape:
         ret_image = cv2.addWeighted(input_image, 0.5, seg_image, 0.5, 0)
     else:
@@ -285,6 +290,7 @@ def select_mask(input_image, sam_image, invert_chk, ignore_black_chk, sel_mask):
             return gr.update()
         else:
             return gr.update(value=ret_image)
+
 
 
 @clear_cache_decorator

@@ -219,8 +219,25 @@ def select_mask(input_image, sam_image, invert_chk, ignore_black_chk, sel_mask):
         return ret_sel_mask
     sam_masks = sam_dict["sam_masks"]
 
-    # image = sam_image["image"]
-    mask = sam_image.get("mask")
+    mask = None
+
+    if isinstance(sam_image, dict):
+        mask = sam_image.get("mask")
+        if mask is None:
+            mask = sam_image.get("image")
+    else:
+        try:
+            from gradio.data_classes import SketchpadData  # type: ignore
+        except Exception:
+            SketchpadData = None
+
+        if SketchpadData is not None and isinstance(sam_image, SketchpadData):
+            mask = getattr(sam_image, "mask", None) or getattr(sam_image, "image", None)
+        elif hasattr(sam_image, "mask"):
+            mask = getattr(sam_image, "mask", None)
+        elif isinstance(sam_image, np.ndarray):
+            mask = sam_image
+
     if mask is None:
         ia_logging.error("Mask data missing in sam_image")
         ret_sel_mask = None if sel_mask is None else gr.update()
